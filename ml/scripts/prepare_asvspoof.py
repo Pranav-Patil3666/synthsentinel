@@ -1,5 +1,6 @@
 import os
 import shutil
+import random
 
 # ==============================
 # BASE PATH
@@ -7,7 +8,7 @@ import shutil
 BASE = r"D:\ml-project\Audio Forensics for Voice Security\ml"
 
 # ==============================
-# ASVspoof Paths
+# ASVspoof Paths (UNCHANGED)
 # ==============================
 asv_base = os.path.join(BASE, "datasets", "asvspoof2019")
 
@@ -27,22 +28,22 @@ dev_protocol = os.path.join(
 # ==============================
 # OUTPUT PATHS
 # ==============================
-output_real = os.path.join(BASE, "data", "real", "asvspoof")
-output_fake = os.path.join(BASE, "data", "fake", "asvspoof")
+output_real = os.path.join(BASE, "data", "processed", "real", "asvspoof")
+output_fake = os.path.join(BASE, "data", "processed", "fake", "asvspoof")
 
 os.makedirs(output_real, exist_ok=True)
 os.makedirs(output_fake, exist_ok=True)
 
 
 # ==============================
-# PROCESS FUNCTION
+# PROCESS FUNCTION (FIXED)
 # ==============================
 def process_protocol(
     protocol_file,
     audio_dir,
     prefix,
-    real_limit=1500,
-    fake_limit=1500,
+    real_limit=8000,
+    fake_limit=8000,
 ):
     real_count = 0
     fake_count = 0
@@ -50,13 +51,18 @@ def process_protocol(
     with open(protocol_file, "r") as f:
         lines = f.readlines()
 
+    # 🔥 FIX: shuffle lines to remove sequential bias
+    random.shuffle(lines)
+
     for line in lines:
         if real_count >= real_limit and fake_count >= fake_limit:
             break
 
         parts = line.strip().split()
 
-        # Extract file ID and label
+        if len(parts) < 2:
+            continue
+
         file_id = parts[1]
         label = parts[-1].strip().lower()
 

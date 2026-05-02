@@ -1,6 +1,7 @@
 import os
 import random
 import subprocess
+import torch
 from TTS.api import TTS
 
 # ==============================
@@ -13,6 +14,7 @@ BASE = r"D:\ml-project\Audio Forensics for Voice Security\ml"
 # ==============================
 output_dir = os.path.join(BASE, "data", "processed", "fake", "tts")
 text_file = os.path.join(BASE, "scripts", "tts_texts.txt")
+speaker_dir = os.path.join(BASE, "data", "tts_speakers")
 
 os.makedirs(output_dir, exist_ok=True)
 
@@ -21,34 +23,44 @@ os.makedirs(output_dir, exist_ok=True)
 # ==============================
 TARGET = 4000
 SAMPLE_RATE = 16000
-RANDOM_SEED = 42
-
-random.seed(RANDOM_SEED)
+random.seed(42)
 
 # ==============================
 # LOAD TEXTS
 # ==============================
 print("📄 Loading text corpus...")
-
 with open(text_file, "r", encoding="utf-8") as f:
     texts = [line.strip() for line in f if line.strip()]
-
-if len(texts) == 0:
-    raise ValueError("❌ No text found in tts_texts.txt")
 
 print(f"✅ Loaded {len(texts)} text samples")
 
 # ==============================
+# LOAD SPEAKERS (CRITICAL FIX)
+# ==============================
+speaker_files = [
+    os.path.join(speaker_dir, f)
+    for f in os.listdir(speaker_dir)
+    if f.lower().endswith(".wav")
+]
+
+if len(speaker_files) == 0:
+    raise ValueError("❌ No speaker wav files found!")
+
+print(f"🎤 Loaded {len(speaker_files)} speaker references")
+
+# ==============================
 # LOAD MODEL
 # ==============================
-print("🔄 Loading TTS model...")
+print("🔄 Loading XTTS v2...")
 tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2")
 
-speakers = tts.speakers if hasattr(tts, "speakers") else [None]
-languages = ["en", "hi"]
+device = "cuda" if torch.cuda.is_available() else "cpu"
+tts.to(device)
+
+print("✅ Model loaded on device:", device)
 
 # ==============================
-# TEXT VARIATION (IMPORTANT)
+# TEXT VARIATION
 # ==============================
 def vary_text(text):
     if random.random() < 0.3:
@@ -66,52 +78,46 @@ def vary_text(text):
 # ==============================
 count = 0
 
-print("🚀 Generating TTS dataset...")
+print("🚀 Generating XTTS dataset...")
 
 while count < TARGET:
     try:
-        base_text = random.choice(texts)
-        text = vary_text(base_text)
-
-        speaker = random.choice(speakers)  #type: ignore
-        lang = random.choice(languages)
+        text = vary_text(random.choice(texts))
+        speaker_wav = random.choice(speaker_files)
 
         temp_path = os.path.join(output_dir, f"temp_{count}.wav")
         final_path = os.path.join(output_dir, f"tts_{count}.wav")
 
         # =========================
-        # GENERATE AUDIO
+        # GENERATE (FIXED)
         # =========================
         tts.tts_to_file(
             text=text,
-            speaker=speaker,   #type: ignore
-            language=lang,
+            speaker_wav=speaker_wav,
+            language="en",   # keep stable for now
             file_path=temp_path
         )
 
         # =========================
-        # NORMALIZE AUDIO
+        # NORMALIZE
         # =========================
-        cmd = [
-            "ffmpeg",
-            "-loglevel", "error",
-            "-y",
+        subprocess.run([
+            "ffmpeg", "-loglevel", "error", "-y",
             "-i", temp_path,
             "-ar", str(SAMPLE_RATE),
             "-ac", "1",
             final_path
-        ]
-        subprocess.run(cmd)
+        ])
 
         if os.path.exists(final_path):
             os.remove(temp_path)
             count += 1
 
-        if count % 500 == 0:
+        if count % 200 == 0:
             print(f"Generated: {count}")
 
     except Exception as e:
-        print(f"⚠️ Skipping error: {e}")
+        print(f"⚠️ Skipping: {e}")
         continue
 
-print(f"✅ Generated {count} TTS samples")
+print(f"✅ Generated {count} XTTS samples")

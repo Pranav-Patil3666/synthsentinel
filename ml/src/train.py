@@ -1,66 +1,163 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 
-from torch.utils.data import DataLoader
-import os
-from dataset import AudioDataset
 
-from model import CNNModel
+from torch.utils.data import (
+    DataLoader,
+    WeightedRandomSampler
+)
+
 from sklearn.metrics import roc_auc_score
+
+from dataset import AudioDataset
+from model import CNNModel
 
 
 def main():
-    
+
+    # =========================
     # PATHS
+    # =========================
     BASE = r"D:\ml-project\Audio Forensics for Voice Security\ml"
 
+    # =========================
     # DEVICE
+    # =========================
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
-    
-    # DATA
-    train_dataset = AudioDataset(f"{BASE}/data/final/train")
-    val_dataset = AudioDataset(f"{BASE}/data/final/val")
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=True, drop_last=True)
-    
-    # MODEL    
+    # =========================
+    # DATASETS
+    # =========================
+    train_dataset = AudioDataset(
+        f"{BASE}/data/final/train"
+    )
+
+    val_dataset = AudioDataset(
+        f"{BASE}/data/final/val"
+    )
+
+    # =========================
+    # WEIGHTED SAMPLER
+    # =========================
+    print("📊 Computing balanced sampling weights...")
+
+    labels = [sample[1] for sample in train_dataset.samples]
+
+    class_counts = np.bincount(labels)
+
+    print("Class counts:", class_counts)
+
+    # principled inverse-frequency weighting
+    class_weights = len(labels) / class_counts
+
+    sample_weights = [
+        class_weights[label]
+        for label in labels
+    ]
+
+    sampler = WeightedRandomSampler(
+        weights=sample_weights,
+        num_samples=len(sample_weights),
+        replacement=True
+    )
+
+    # =========================
+    # DATALOADERS
+    # =========================
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=32,
+        sampler=sampler,
+        num_workers=4,
+        pin_memory=True,
+        drop_last=True
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=32,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        drop_last=False
+    )
+
+    # =========================
+    # MODEL
+    # =========================
     model = CNNModel().to(device)
 
-    # LOSS (IMPROVED)    
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
+    # =========================
+    # LOSS
+    # =========================
+    criterion = nn.CrossEntropyLoss(
+        label_smoothing=0.05
+    )
 
-    # OPTIMIZER    
-    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)  #type: ignore
-     
+    # =========================
+    # OPTIMIZER
+    # =========================
+    optimizer = optim.AdamW(     # type: ignore
+        model.parameters(),
+        lr=1e-3,
+        weight_decay=1e-4
+    )
+
+    # =========================
     # SCHEDULER
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+    # =========================
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=10
+    )
 
-    # TRAINING    
+    # =========================
+    # TRAINING CONFIG
+    # =========================
     EPOCHS = 20
     best_auc = 0.0
-    scaler = torch.amp.GradScaler("cuda")  # 🔥 mixed precision  #type: ignore
 
+    scaler = torch.amp.GradScaler("cuda")    # type: ignore
+
+    # =========================
+    # TRAIN LOOP
+    # =========================
     for epoch in range(EPOCHS):
+
         model.train()
-        total_loss = 0
+
+        total_loss = 0.0
 
         for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+
+            x = x.to(device)
+            y = y.to(device)
 
             optimizer.zero_grad()
 
-            # 🔥 Mixed precision
-            with torch.amp.autocast("cuda"):  #type: ignore
+            # =====================
+            # MIXED PRECISION
+            # =====================
+            with torch.amp.autocast("cuda"):     # type: ignore
+
                 outputs = model(x)
+
                 loss = criterion(outputs, y)
 
+            # =====================
+            # BACKPROP
+            # =====================
             scaler.scale(loss).backward()
 
-            # 🔥 Gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            # gradient clipping
+            torch.nn.utils.clip_grad_norm_(
+                model.parameters(),
+                1.0
+            )
 
             scaler.step(optimizer)
             scaler.update()
@@ -69,9 +166,11 @@ def main():
 
         avg_loss = total_loss / len(train_loader)
 
-        
+        # =========================
         # VALIDATION
+        # =========================
         model.eval()
+
         preds = []
         targets = []
 
@@ -79,43 +178,89 @@ def main():
         total = 0
 
         with torch.no_grad():
+
             for x, y in val_loader:
-                x, y = x.to(device), y.to(device)
+
+                x = x.to(device)
+                y = y.to(device)
 
                 outputs = model(x)
-                probs = torch.softmax(outputs, dim=1)[:, 1]
 
-                preds.extend(probs.cpu().numpy())
-                targets.extend(y.cpu().numpy())
+                probs = torch.softmax(
+                    outputs,
+                    dim=1
+                )[:, 1]
 
-                predicted = torch.argmax(outputs, dim=1)
-                correct += (predicted == y).sum().item()
+                preds.extend(
+                    probs.cpu().numpy()
+                )
+
+                targets.extend(
+                    y.cpu().numpy()
+                )
+
+                predicted = torch.argmax(
+                    outputs,
+                    dim=1
+                )
+
+                correct += (
+                    predicted == y
+                ).sum().item()
+
                 total += y.size(0)
 
         accuracy = 100 * correct / total
 
         try:
-            auc = roc_auc_score(targets, preds)
-        except:
+            auc = roc_auc_score(
+                targets,
+                preds
+            )
+        except Exception:
             auc = 0.0
 
-        
-        # SAVE BEST MODEL
-        
+        # =========================
+        # SAVE BEST
+        # =========================
         if auc > best_auc:
+
             best_auc = auc
-            torch.save(model.state_dict(), os.path.join(BASE, "models", "cnn_best.pth"))
+
+            torch.save(
+                model.state_dict(),
+                os.path.join(
+                    BASE,
+                    "models",
+                    "cnn_best.pth"
+                )
+            )
 
         scheduler.step()
 
-        print(f"Epoch {epoch+1}/{EPOCHS} | Loss: {avg_loss:.4f} | Acc: {accuracy:.2f}% | AUC: {auc:.4f}")
+        print(
+            f"Epoch {epoch+1}/{EPOCHS} "
+            f"| Loss: {avg_loss:.4f} "
+            f"| Acc: {accuracy:.2f}% "
+            f"| AUC: {auc:.4f}"
+        )
 
-    
+    # =========================
     # SAVE FINAL
-    
-    torch.save(model.state_dict(), os.path.join(BASE, "models", "cnn_last.pth"))
+    # =========================
+    torch.save(
+        model.state_dict(),
+        os.path.join(
+            BASE,
+            "models",
+            "cnn_last.pth"
+        )
+    )
 
-    print(f"✅ Training complete | Best AUC: {best_auc:.4f}")
+    print(
+        f"\n✅ Training complete "
+        f"| Best AUC: {best_auc:.4f}"
+    )
 
 
 if __name__ == "__main__":

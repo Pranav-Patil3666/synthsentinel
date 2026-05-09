@@ -40,8 +40,6 @@ from wav2vec_dataset import Wav2VecAudioDataset
 MODEL_NAME = "facebook/wav2vec2-base"
 SEED = 42
 
-# Effective batch = TRAIN_BATCH_SIZE × GRAD_ACCUM_STEPS = 8 × 2 = 16
-# Same as before (2 × 8 = 16), just fewer accumulation steps
 TRAIN_BATCH_SIZE = 8
 EVAL_BATCH_SIZE  = 8
 GRAD_ACCUM_STEPS = 2
@@ -50,15 +48,14 @@ GRAD_ACCUM_STEPS = 2
 EPOCHS   = 10
 PATIENCE = 3
 
-# Higher LR safe for base model — less pretrained rigidity than xlsr-53
+
 # Warmup protects against instability
-LEARNING_RATE_BASE = 1e-4
-LEARNING_RATE_HEAD = 5e-4
+LEARNING_RATE_BASE = 2e-5   
+LEARNING_RATE_HEAD = 1e-4   
 WEIGHT_DECAY       = 0.01
 WARMUP_RATIO       = 0.1
 
-# 2s matches streaming pipeline chunk size and original CNN training
-# wav2vec2 attention is O(T²) — halving duration = 4x faster per step
+
 MAX_DURATION = 2
 SAMPLE_RATE  = 16000
 

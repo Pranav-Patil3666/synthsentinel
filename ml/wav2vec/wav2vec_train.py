@@ -3,8 +3,8 @@ import math
 import os
 import random
 import sys
-from contextlib import nullcontext
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import torch
@@ -84,10 +84,14 @@ def build_sampler(train_dataset: Wav2VecAudioDataset):
         raise ValueError("Train set must contain both real and fake samples.")
 
     class_weights = len(labels) / np.maximum(class_counts, 1)
-    sample_weights = [class_weights[label] for label in labels]
+
+    # FIX 1 — pass plain Python list, not tensor
+    sample_weights: list[float] = [
+        float(class_weights[label]) for label in labels
+    ]
 
     sampler = WeightedRandomSampler(
-        weights=torch.as_tensor(sample_weights, dtype=torch.double),
+        weights=sample_weights,
         num_samples=len(sample_weights),
         replacement=True,
     )
@@ -109,7 +113,12 @@ def find_best_threshold(y_true: np.ndarray, y_prob: np.ndarray):
     return best_threshold, best_f1
 
 
-def evaluate(model, loader, device, criterion):
+def evaluate(
+    model: Wav2Vec2ForSequenceClassification,
+    loader: DataLoader,
+    device: torch.device,
+    criterion: nn.CrossEntropyLoss,
+):
     model.eval()
 
     total_loss = 0.0
@@ -160,10 +169,14 @@ def evaluate(model, loader, device, criterion):
     return metrics, y_true, y_prob
 
 
-def save_bundle(save_dir: Path, model, processor):
+def save_bundle(
+    save_dir: Path,
+    model: Wav2Vec2ForSequenceClassification,
+    processor: AutoProcessor,  # type: ignore
+) -> None:
     save_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(save_dir)
-    processor.save_pretrained(save_dir)
+    processor.save_pretrained(save_dir)   #type: ignore
 
 
 def main():
@@ -231,32 +244,38 @@ def main():
     )
 
     print("🧠 Loading XLSR-Wav2Vec2 model...")
-    model = Wav2Vec2ForSequenceClassification.from_pretrained(
-        MODEL_NAME,
-        num_labels=2,
-        label2id=LABEL2ID,
-        id2label=ID2LABEL,
-        problem_type="single_label_classification",
-        ignore_mismatched_sizes=True,
+
+    # FIX 2 — explicit cast silences all model attribute errors
+    model = cast(
+        Wav2Vec2ForSequenceClassification,
+        Wav2Vec2ForSequenceClassification.from_pretrained(
+            MODEL_NAME,
+            num_labels=2,
+            label2id=LABEL2ID,
+            id2label=ID2LABEL,
+            problem_type="single_label_classification",
+            ignore_mismatched_sizes=True,
+        )
     )
 
-    # Mild regularization tuning for your task
     model.config.hidden_dropout = 0.10
     model.config.attention_dropout = 0.10
     model.config.activation_dropout = 0.10
     model.config.feat_proj_dropout = 0.10
     model.config.final_dropout = 0.10
-    model.config.classifier_proj_size = getattr(model.config, "classifier_proj_size", 256)
+    model.config.classifier_proj_size = getattr(
+        model.config, "classifier_proj_size", 256
+    )
 
     try:
         model.freeze_feature_encoder()
     except Exception:
         try:
-            model.freeze_feature_extractor()
+            model.freeze_feature_extractor()  # type: ignore[attr-defined]
         except Exception:
             pass
 
-    model.to(device)
+    model.to(device)   #type: ignore
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
 
@@ -271,7 +290,7 @@ def main():
         else:
             head_params.append(param)
 
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.AdamW(  # type: ignore[attr-defined]
         [
             {"params": base_params, "lr": LEARNING_RATE_BASE},
             {"params": head_params, "lr": LEARNING_RATE_HEAD},
@@ -289,7 +308,7 @@ def main():
         num_training_steps=total_train_steps,
     )
 
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)  # type: ignore[attr-defined]
 
     best_auc = -1.0
     best_threshold = 0.50
@@ -308,9 +327,7 @@ def main():
             input_values = batch["input_values"].to(device)
             labels = batch["labels"].to(device)
 
-            autocast_ctx = torch.amp.autocast("cuda", enabled=use_amp)
-
-            with autocast_ctx:
+            with torch.amp.autocast("cuda", enabled=use_amp):  # type: ignore[attr-defined]
                 outputs = model(input_values=input_values)
                 logits = outputs.logits
                 loss = criterion(logits, labels)
@@ -319,11 +336,15 @@ def main():
             scaler.scale(loss_to_backprop).backward()
             running_loss += loss.item()
 
-            should_step = ((step + 1) % GRAD_ACCUM_STEPS == 0) or ((step + 1) == len(train_loader))
+            should_step = (
+                (step + 1) % GRAD_ACCUM_STEPS == 0
+            ) or (
+                (step + 1) == len(train_loader)
+            )
+
             if should_step:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
@@ -332,7 +353,9 @@ def main():
 
         train_loss = running_loss / max(len(train_loader), 1)
 
-        val_metrics, y_true, y_prob = evaluate(model, val_loader, device, criterion)
+        val_metrics, y_true, y_prob = evaluate(
+            model, val_loader, device, criterion
+        )
         optimal_threshold, best_f1_at_thr = find_best_threshold(y_true, y_prob)
 
         print(

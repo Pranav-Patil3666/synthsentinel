@@ -25,7 +25,7 @@ def enum_value(value: Any) -> Any:
 
 
 def to_serializable(obj: Any) -> Any:
-    if is_dataclass(obj):
+    if is_dataclass(obj) and not isinstance(obj, type):  # excludes dataclass types/classes
         return {k: to_serializable(v) for k, v in asdict(obj).items()}
     if isinstance(obj, Enum):
         return obj.value

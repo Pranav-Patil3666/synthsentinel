@@ -40,8 +40,8 @@ class EnsembleConfig:
             return EnsembleConfig()
 
         return EnsembleConfig(
-            cnn_weight=safe_div(self.cnn_weight, total, 0.0),
-            wav2vec2_weight=safe_div(self.wav2vec2_weight, total, 0.0),
+            cnn_weight=safe_div(self.cnn_weight, total, 0.5125),
+            wav2vec2_weight=safe_div(self.wav2vec2_weight, total, 0.4875),
             rules_weight=safe_div(self.rules_weight, total, 0.0),
             agreement_boost=self.agreement_boost,
             disagreement_penalty=self.disagreement_penalty,

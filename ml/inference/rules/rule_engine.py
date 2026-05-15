@@ -147,9 +147,9 @@ class RuleEngine:
         temporal_result: TemporalRuleResult | None = None
         consistency_result: ConsistencyRuleResult | None = None
 
-        # -------------------------
+        
         # AUDIO RULES
-        # -------------------------
+        
         if waveform is None and audio_path is not None:
             audio_sr = int(sample_rate or RUNTIME.sample_rate)
             waveform, _ = load_audio(audio_path, sample_rate=audio_sr, mono=True, normalize=False)
@@ -183,9 +183,9 @@ class RuleEngine:
                     },
                 )
 
-        # -------------------------
+        
         # TEMPORAL RULES
-        # -------------------------
+        
         current_fake_prob = self._extract_current_fake_prob(cnn_pred, wav2vec2_pred)
         current_label = (
             AudioLabel.FAKE if (current_fake_prob is not None and current_fake_prob >= 0.5) else
@@ -206,9 +206,9 @@ class RuleEngine:
                 current_label=current_label,
             )
 
-        # -------------------------
+        
         # CONSISTENCY RULES
-        # -------------------------
+        
         consistency_result = evaluate_detector_consistency(
             cnn_pred=cnn_pred,
             wav2vec2_pred=wav2vec2_pred,
@@ -234,9 +234,9 @@ class RuleEngine:
                 },
             )
 
-        # -------------------------
+        
         # COMBINE
-        # -------------------------
+        
         w_audio, w_temp, w_cons = self._normalized_weights()
 
         components: list[tuple[str, float, Dict[str, float], list[str], Dict[str, Any]]] = []

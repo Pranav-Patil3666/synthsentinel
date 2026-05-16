@@ -155,13 +155,15 @@ def evaluate_detector_consistency(
         )
         reasons = ["both_fake"]
     elif both_real:
-        score = _clamp01(0.10 * gap)
+        avg_fake = (cnn_fake + wav_fake) / 2.0
+        score = _clamp01(0.05 * gap + 0.10 * avg_fake)
         reasons = ["both_real"]
+        
     else:
         # Strong disagreement is not automatically fake, but it is suspicious.
         score = _clamp01(
-            0.40 * max(cnn_fake, wav_fake)
-            + 0.35 * min(1.0, gap / max(1e-8, THRESHOLDS.disagreement_delta))
+            0.30 * max(cnn_fake, wav_fake)
+            + 0.45 * min(1.0, gap / max(1e-8, THRESHOLDS.disagreement_delta))
             + 0.25 * confidence_gap
         )
         reasons = ["detector_disagreement"]

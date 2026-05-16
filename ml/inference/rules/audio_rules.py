@@ -165,12 +165,16 @@ def evaluate_audio_chunk(
     clipping_score = _clamp01(clipping_ratio / 0.02)
     dynamic_range_score = _clamp01((15.0 - dynamic_range_db) / 15.0) if dynamic_range_db < 15.0 else 0.0
 
+    flatness_score = _clamp01((flatness_mean - 0.3) / 0.7) if flatness_mean > 0.3 else 0.0
+    
     # Keep this conservative: we want strong anomalies only.
+
     score = (
-        0.40 * silence_score
-        + 0.30 * low_energy_score
+        0.35 * silence_score
+        + 0.25 * low_energy_score
         + 0.20 * clipping_score
         + 0.10 * dynamic_range_score
+        + 0.10 * flatness_score   # add this
     )
 
     if silence_score >= 0.50:

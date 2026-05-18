@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict
 
+
+
 from ._base import env_float, safe_div
+
+from inference.schemas.ensemble_schema import EnsembleWeights
 
 
 @dataclass(slots=True)
@@ -32,25 +36,29 @@ class EnsembleConfig:
 
     @property
     def total_weight(self) -> float:
-        return self.cnn_weight + self.wav2vec2_weight + self.rules_weight
+        return (
+            self.cnn_weight
+            + self.wav2vec2_weight
+            + self.rules_weight
+        )
 
-    def normalized(self) -> "EnsembleConfig":
+    def normalized(self) -> "EnsembleWeights":
         if not self.normalize_weights:
-            return self
+            return EnsembleWeights(
+                cnn=self.cnn_weight,
+                wav2vec2=self.wav2vec2_weight,
+                rules=self.rules_weight,
+            )
 
         total = self.total_weight
-        if total <= 0:
-            return EnsembleConfig()
 
-        return EnsembleConfig(
-            cnn_weight=safe_div(self.cnn_weight, total, 0.0),
-            wav2vec2_weight=safe_div(self.wav2vec2_weight, total, 0.0),
-            rules_weight=safe_div(self.rules_weight, total, 0.0),
-            agreement_boost=self.agreement_boost,
-            disagreement_penalty=self.disagreement_penalty,
-            rule_boost_scale=self.rule_boost_scale,
-            use_logit_fusion=self.use_logit_fusion,
-            normalize_weights=self.normalize_weights,
+        if total <= 0:
+            return EnsembleWeights()
+
+        return EnsembleWeights(
+            cnn=safe_div(self.cnn_weight, total, 0.0),
+            wav2vec2=safe_div(self.wav2vec2_weight, total, 0.0),
+            rules=safe_div(self.rules_weight, total, 0.0),
         )
 
     def to_dict(self) -> Dict[str, float | bool]:

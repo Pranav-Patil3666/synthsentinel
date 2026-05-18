@@ -6,10 +6,10 @@ from typing import Any, Dict, Iterable, Optional
 from ..config import ENSEMBLE, THRESHOLDS
 from ..schemas import (
     AudioLabel,
+    PredictionResult,
     EnsembleWeights,
     FusionResult,
     ModelContribution,
-    PredictionResult,
     RiskLevel,
     SessionState,
 )

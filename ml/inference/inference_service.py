@@ -9,8 +9,6 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
-from inference.schemas.ensemble_schema import EnsembleWeights
-
 from .config import PATHS, THRESHOLDS, RUNTIME, ENSEMBLE
 from .detectors import CNNDetector, Wav2Vec2Detector
 from .ensemble import EnsembleFusionEngine
@@ -97,11 +95,7 @@ class InferenceService:
 
         # Fixed ensemble weights for now; no calibration layer involved
         self.ensemble = EnsembleFusionEngine(
-                weights=EnsembleWeights(
-                cnn=ENSEMBLE.cnn,
-                wav2vec2=ENSEMBLE.wav2vec2,
-                rules=ENSEMBLE.rules,
-            ),
+            weights=ENSEMBLE.normalized(),
             final_threshold=None,  # let detector thresholds + ensemble logic drive this
         )
 

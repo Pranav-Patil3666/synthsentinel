@@ -1,138 +1,288 @@
+export type RiskBand = "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
+
+export interface RiskUpdateInput {
+  callId?: string;
+  label?: string;
+  inferenceRisk?: string;
+  chunkIndex?: number;
+  skipped?: boolean;
+}
+
+export interface SessionRiskStats {
+  sessionId: string;
+  callId: string;
+  history: number[];
+  smoothed: number | null;
+  backendRisk: RiskBand;
+  combinedRisk: RiskBand;
+  previousRisk: RiskBand;
+  fakeStreak: number;
+  mediumStreak: number;
+  highStreak: number;
+  totalChunks: number;
+  skippedChunks: number;
+  lastFakeProb: number;
+  lastLabel: string;
+  rollingAvg: number;
+  trend: number;
+  updatedAt: string;
+}
+
+const RISK_ORDER: Record<RiskBand, number> = {
+  UNKNOWN: -1,
+  LOW: 0,
+  MEDIUM: 1,
+  HIGH: 2,
+};
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function normalizeRisk(value?: string): RiskBand {
+  const v = (value ?? "UNKNOWN").toUpperCase();
+  if (v === "LOW" || v === "MEDIUM" || v === "HIGH" || v === "UNKNOWN") {
+    return v;
+  }
+  return "UNKNOWN";
+}
+
+function maxRisk(a: RiskBand, b: RiskBand): RiskBand {
+  return RISK_ORDER[a] >= RISK_ORDER[b] ? a : b;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+interface SessionState {
+  sessionId: string;
+  callId: string;
+  history: number[];
+  smoothed: number | null;
+  backendRisk: RiskBand;
+  combinedRisk: RiskBand;
+  previousRisk: RiskBand;
+  fakeStreak: number;
+  mediumStreak: number;
+  highStreak: number;
+  totalChunks: number;
+  skippedChunks: number;
+  lastFakeProb: number;
+  lastLabel: string;
+  updatedAt: string;
+}
+
 export class RiskEngine {
+  private sessions = new Map<string, SessionState>();
 
-  private history: number[] = [];
-  private maxWindow = 5;
+  private readonly maxWindow = 5;
+  private readonly alpha = 0.6;
 
-  private smoothedScore: number | null = null;
-  private previousRisk = "LOW";
+  private readonly mediumThreshold = 0.55;
+  private readonly highThreshold = 0.75;
+  private readonly spikeDelta = 0.45;
 
-  // calibrated thresholds
-  private HIGH_THRESHOLD = 0.80;
-  private MEDIUM_THRESHOLD = 0.50;
-
-  addPrediction(fakeProb: number) {
-
-    
-    // 1. CLIP EXTREME NOISE
-    
-    fakeProb = Math.max(0, Math.min(1, fakeProb));
-
-    
-    // 2. UPDATE HISTORY
-    
-    this.history.push(fakeProb);
-
-    if (this.history.length > this.maxWindow) {
-      this.history.shift();
+  private getOrCreateSession(sessionId: string, callId?: string): SessionState {
+    const existing = this.sessions.get(sessionId);
+    if (existing) {
+      if (callId && !existing.callId) {
+        existing.callId = callId;
+      }
+      return existing;
     }
 
-    
-    // 3. EMA SMOOTHING
-    
-    if (this.smoothedScore === null) {
+    const fresh: SessionState = {
+      sessionId,
+      callId: callId ?? "",
+      history: [],
+      smoothed: null,
+      backendRisk: "UNKNOWN",
+      combinedRisk: "UNKNOWN",
+      previousRisk: "UNKNOWN",
+      fakeStreak: 0,
+      mediumStreak: 0,
+      highStreak: 0,
+      totalChunks: 0,
+      skippedChunks: 0,
+      lastFakeProb: 0,
+      lastLabel: "UNKNOWN",
+      updatedAt: nowIso(),
+    };
 
-      this.smoothedScore = fakeProb;
+    this.sessions.set(sessionId, fresh);
+    return fresh;
+  }
 
-    } else {
-
-      this.smoothedScore =
-        0.7 * fakeProb +
-        0.3 * this.smoothedScore;
+  private computeBackendRisk(history: number[], smoothed: number | null): RiskBand {
+    if (history.length === 0) {
+      return "LOW";
     }
 
-    
-    // 4. CONSISTENCY
-    
-    const mediumCount =
-      this.history.filter(
-        (v) => v >= this.MEDIUM_THRESHOLD
-      ).length;
+    const highHits = history.filter((v) => v >= this.highThreshold).length;
+    const mediumHits = history.filter((v) => v >= this.mediumThreshold).length;
 
-    const highCount =
-      this.history.filter(
-        (v) => v >= this.HIGH_THRESHOLD
-      ).length;
+    let risk: RiskBand = "LOW";
 
-    
-    // 5. STRONG FAKE AVERAGE
-    
-    const avg =
-      this.history.reduce((a, b) => a + b, 0)
-      / this.history.length;
+    if (highHits >= 3) {
+      risk = "HIGH";
+    } else if (mediumHits >= 2 || (smoothed ?? 0) >= this.mediumThreshold) {
+      risk = "MEDIUM";
+    }
 
-    
-    // 6. SPIKE DETECTION
-    
-    let spike = false;
+    if (history.length >= 2) {
+      const last = history[history.length - 1];
+      const prev = history[history.length - 2];
+      const spike = Math.abs(last - prev);
 
-    if (this.history.length >= 2) {
-
-      const last =
-        this.history[this.history.length - 1];
-
-      const prev =
-        this.history[this.history.length - 2];
-
-      if (Math.abs(last - prev) > 0.45) {
-        spike = true;
+      if (spike >= this.spikeDelta && risk === "LOW") {
+        risk = "MEDIUM";
       }
     }
 
-    
-    // 7. FINAL DECISION
-    
-    let risk = "LOW";
-
-    // persistent strong fake
-    if (
-      highCount >= 3 &&
-      avg >= 0.75
-    ) {
-
-      risk = "HIGH";
+    if (history.length >= 2) {
+      const trend = history[history.length - 1] - history[0];
+      if (trend >= 0.25 && risk === "LOW") {
+        risk = "MEDIUM";
+      }
     }
-
-    // sustained suspicion
-    else if (
-      mediumCount >= 2 ||
-      (this.smoothedScore ?? 0) >= 0.55
-    ) {
-
-      risk = "MEDIUM";
-    }
-
-    // isolated spikes
-    if (
-      spike &&
-      risk === "LOW"
-    ) {
-
-      risk = "MEDIUM";
-    }
-
-    
-    // 8. HYSTERESIS
-    
-    if (
-      this.previousRisk === "HIGH" &&
-      risk === "MEDIUM" &&
-      (this.smoothedScore ?? 0) > 0.45
-    ) {
-
-      risk = "HIGH";
-    }
-
-    this.previousRisk = risk;
 
     return risk;
   }
 
-  getStats() {
+  update(
+    sessionId: string,
+    fakeProb: number,
+    input: RiskUpdateInput = {}
+  ): { risk: RiskBand; backendRisk: RiskBand; stats: SessionRiskStats; reason: string } {
+    const state = this.getOrCreateSession(sessionId, input.callId);
+
+    const p = clamp01(fakeProb);
+
+    state.totalChunks += 1;
+    state.lastFakeProb = p;
+    state.lastLabel = input.label?.trim() || state.lastLabel;
+
+    state.history.push(p);
+    if (state.history.length > this.maxWindow) {
+      state.history.shift();
+    }
+
+    if (state.smoothed === null) {
+      state.smoothed = p;
+    } else {
+      state.smoothed = this.alpha * p + (1 - this.alpha) * state.smoothed;
+    }
+
+    const backendRisk = this.computeBackendRisk(state.history, state.smoothed);
+
+    let combinedRisk = backendRisk;
+    const inferenceRisk = normalizeRisk(input.inferenceRisk);
+
+    combinedRisk = maxRisk(combinedRisk, inferenceRisk);
+
+    if (p >= this.highThreshold) {
+      state.fakeStreak += 1;
+      state.mediumStreak = 0;
+    } else if (p >= this.mediumThreshold) {
+      state.mediumStreak += 1;
+      state.fakeStreak = 0;
+    } else {
+      state.fakeStreak = 0;
+      state.mediumStreak = 0;
+    }
+
+    if (combinedRisk === "HIGH") {
+      state.highStreak += 1;
+    } else if (combinedRisk === "MEDIUM") {
+      state.highStreak = 0;
+    } else {
+      state.highStreak = 0;
+    }
+
+    state.backendRisk = backendRisk;
+    state.combinedRisk = combinedRisk;
+    state.previousRisk = combinedRisk;
+    state.updatedAt = nowIso();
+
+    const rollingAvg =
+      state.history.length > 0
+        ? state.history.reduce((a, b) => a + b, 0) / state.history.length
+        : 0;
+
+    const trend =
+      state.history.length >= 2
+        ? state.history[state.history.length - 1] - state.history[0]
+        : 0;
+
+    const stats = this.getStats(sessionId);
+
+    let reason = "probability_trend";
+    if (inferenceRisk !== "UNKNOWN") {
+      reason = `backend:${backendRisk}, inference:${inferenceRisk}`;
+    } else {
+      reason = `backend:${backendRisk}`;
+    }
+
+    if (combinedRisk === "HIGH" && state.fakeStreak >= 3) {
+      reason = `${reason}, fake_streak`;
+    }
 
     return {
-      history: this.history,
-      smoothed: this.smoothedScore,
-      previousRisk: this.previousRisk,
+      risk: combinedRisk,
+      backendRisk,
+      stats: {
+        ...stats,
+        rollingAvg,
+        trend,
+      },
+      reason,
     };
+  }
+
+  getStats(sessionId: string): SessionRiskStats {
+    const state = this.getOrCreateSession(sessionId);
+
+    const rollingAvg =
+      state.history.length > 0
+        ? state.history.reduce((a, b) => a + b, 0) / state.history.length
+        : 0;
+
+    const trend =
+      state.history.length >= 2
+        ? state.history[state.history.length - 1] - state.history[0]
+        : 0;
+
+    return {
+      sessionId: state.sessionId,
+      callId: state.callId,
+      history: [...state.history],
+      smoothed: state.smoothed,
+      backendRisk: state.backendRisk,
+      combinedRisk: state.combinedRisk,
+      previousRisk: state.previousRisk,
+      fakeStreak: state.fakeStreak,
+      mediumStreak: state.mediumStreak,
+      highStreak: state.highStreak,
+      totalChunks: state.totalChunks,
+      skippedChunks: state.skippedChunks,
+      lastFakeProb: state.lastFakeProb,
+      lastLabel: state.lastLabel,
+      rollingAvg,
+      trend,
+      updatedAt: state.updatedAt,
+    };
+  }
+
+  registerSkip(sessionId: string, callId?: string): SessionRiskStats {
+    const state = this.getOrCreateSession(sessionId, callId);
+    state.skippedChunks += 1;
+    state.updatedAt = nowIso();
+    return this.getStats(sessionId);
+  }
+
+  resetSession(sessionId: string): boolean {
+    return this.sessions.delete(sessionId);
   }
 }

@@ -9,9 +9,9 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-# -------------------------------------------------------------------
+
 # Make `ml/` importable so we can reach `inference/`
-# -------------------------------------------------------------------
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
@@ -28,10 +28,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------------------------------------------------------
+
 # Warm, frozen inference service
 # Uses fixed thresholds from config only.
-# -------------------------------------------------------------------
+
 INFERENCE_SERVICE = InferenceService(enable_rules=True)
 
 

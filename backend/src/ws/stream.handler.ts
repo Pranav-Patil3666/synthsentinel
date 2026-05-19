@@ -1,7 +1,18 @@
 import { WebSocketServer, WebSocket } from "ws";
+import { randomUUID } from "crypto";
+import fs from "fs";
 import { sendToML } from "../services/ml_service.js";
 import { RiskEngine } from "../services/risk_service.js";
-import fs from "fs";
+
+function safeUnlink(filePath: string) {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (err) {
+    console.error("⚠️ Failed to delete chunk:", err);
+  }
+}
 
 export const initWebSocket = (server: any) => {
   const wss = new WebSocketServer({ server });
@@ -11,48 +22,115 @@ export const initWebSocket = (server: any) => {
   wss.on("connection", (ws: WebSocket) => {
     console.log("🔌 Client connected");
 
-    const riskEngine = new RiskEngine(); // 🔥 per connection
+    const sessionId = randomUUID();
+    const riskEngine = new RiskEngine();
+    let localChunkIndex = 0;
+    let callId: string | undefined = undefined;
+
+    ws.send(
+      JSON.stringify({
+        type: "session",
+        sessionId,
+      })
+    );
 
     ws.on("message", async (message: any) => {
       try {
         const data = JSON.parse(message.toString());
 
-        if (data.type === "chunk") {
-          const filePath = data.filePath;
+        if (data.type !== "chunk") {
+          return;
+        }
 
-          const result = await sendToML(filePath);
+        const filePath = data.filePath as string;
+        if (!filePath) {
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              message: "Missing filePath",
+              sessionId,
+            })
+          );
+          return;
+        }
 
-          // 🔥 SKIP NON-SPEECH CHUNKS
-          if (!result || result.skip) {
-            fs.unlinkSync(filePath);
-            return;
-          }
+        callId = data.callId ?? callId ?? sessionId;
+        const chunkIndex =
+          typeof data.chunkIndex === "number"
+            ? data.chunkIndex
+            : localChunkIndex++;
 
-          const fakeProb = result.fake_prob || 0;
+        const result = await sendToML(filePath, {
+          sessionId,
+          callId,
+          chunkIndex,
+        });
 
-          // 🔥 compute rolling risk
-          const risk = riskEngine.addPrediction(fakeProb);
+        if (!result || result.skip) {
+          safeUnlink(filePath);
 
           ws.send(
             JSON.stringify({
-              type: "prediction",
-              label: result.label,
-              confidence: result.confidence,
-              risk,
-              stats: riskEngine.getStats(),
+              type: "skip",
+              sessionId,
+              callId,
+              chunkIndex,
+              skip: true,
+              skip_reason: result?.skip_reason ?? "non_speech_or_unusable_chunk",
             })
           );
-
-          // cleanup
-          fs.unlinkSync(filePath);
+          return;
         }
+
+        const fakeProb = result.fake_prob ?? result.final?.fake_prob ?? 0;
+
+        // Temporary backend-side rolling view for the dashboard.
+        // The authoritative decision still comes from the inference service.
+        const rollingRisk = riskEngine.addPrediction(fakeProb);
+
+        const finalLabel = result.final?.label ?? result.label ?? "UNKNOWN";
+        const finalConfidence = result.final?.confidence ?? result.confidence ?? 0;
+        const finalRisk = result.final?.risk ?? result.risk ?? rollingRisk;
+        const finalRealProb = result.final?.real_prob ?? result.real_prob ?? 0;
+        const finalFakeProb = result.final?.fake_prob ?? result.fake_prob ?? 0;
+
+        ws.send(
+          JSON.stringify({
+            type: "prediction",
+            sessionId,
+            callId,
+            chunkIndex,
+            label: finalLabel,
+            confidence: finalConfidence,
+            risk: finalRisk,
+            real_prob: finalRealProb,
+            fake_prob: finalFakeProb,
+            threshold: result.final?.threshold ?? result.threshold ?? 0.5,
+            stats: riskEngine.getStats(),
+            session_summary: result.session_summary,
+            cnn: result.cnn,
+            wav2vec2: result.wav2vec2,
+            rules: result.rules,
+            ensemble: result.ensemble,
+            final: result.final,
+            raw: result.raw,
+          })
+        );
+
+        safeUnlink(filePath);
       } catch (err) {
         console.error("❌ WS error:", err);
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "WebSocket processing failed",
+          })
+        );
       }
     });
 
     ws.on("close", () => {
-      console.log("❌ Client disconnected");
+      console.log("❌ Client disconnected", sessionId);
     });
   });
 

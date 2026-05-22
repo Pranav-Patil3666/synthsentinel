@@ -38,6 +38,9 @@ class PredictionResult:
     risk: RiskLevel | str = RiskLevel.UNKNOWN
     skip: bool = False
 
+    session_id: Optional[str] = None
+    call_id: Optional[str] = None
+
     model_name: str = ""
     model_version: str = ""
     sample_rate: int = 16000
@@ -54,6 +57,8 @@ class PredictionResult:
         self.model_name = normalize_string(self.model_name, self.detector)
         self.model_version = normalize_string(self.model_version, "v1")
         self.chunk_path = normalize_string(self.chunk_path, "") or None
+        self.session_id = normalize_string(self.session_id, "") or None
+        self.call_id = normalize_string(self.call_id, "") or None
 
         self.label = AudioLabel(enum_value(self.label)) if not isinstance(self.label, AudioLabel) else self.label
         self.risk = RiskLevel(enum_value(self.risk)) if not isinstance(self.risk, RiskLevel) else self.risk

@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from ..inference.inference_service import InferenceService  # noqa: E402
+from inference.inference_service import InferenceService  # noqa: E402  #type: ignore
 
 app = FastAPI(title="SynthSentinel Inference API", version="1.0.0")
 

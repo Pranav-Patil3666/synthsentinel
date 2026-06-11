@@ -237,8 +237,8 @@ SynthSentinel/
 | Evaluation reports | ✅ Complete |
 | Inference architecture scaffold | ✅ Built |
 | Backend streaming foundation | ✅ Built |
-| Ensemble integration | 🔄 In progress |
-| Rule engine orchestration | 🔄 In progress |
+| Ensemble integration | ✅ In progress |
+| Rule engine orchestration | ✅ In progress |
 | Session-level risk aggregation | 🔄 Planned |
 | Dashboard event streaming | 🔄 Planned |
 | Alert generation | 🔄 Planned |

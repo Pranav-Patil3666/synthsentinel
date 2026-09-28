@@ -5,8 +5,6 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { sendToML } from "../services/ml_service.js";
 
-type TwilioEventName = "connected" | "start" | "media" | "stop" | "mark" | "dtmf";
-
 interface TwilioConnectedMessage {
   event: "connected";
   protocol: string;
@@ -52,6 +50,33 @@ interface TwilioStopMessage {
   streamSid?: string;
 }
 
+interface TwilioMarkMessage {
+  event: "mark";
+  sequenceNumber?: string;
+  streamSid?: string;
+  mark?: {
+    name?: string;
+  };
+}
+
+interface TwilioDtmfMessage {
+  event: "dtmf";
+  sequenceNumber?: string;
+  streamSid?: string;
+  dtmf?: {
+    track?: string;
+    digit?: string;
+  };
+}
+
+type TwilioMessage =
+  | TwilioConnectedMessage
+  | TwilioStartMessage
+  | TwilioMediaMessage
+  | TwilioStopMessage
+  | TwilioMarkMessage
+  | TwilioDtmfMessage;
+
 interface TwilioStreamState {
   sessionId: string;
   callId: string;
@@ -69,10 +94,11 @@ interface TwilioStreamState {
 const INPUT_SAMPLE_RATE = 8000; // inbound audio format
 const INPUT_CHANNELS = 1;
 const INPUT_BYTES_PER_SAMPLE = 2; // PCM16
-const CHUNK_SECONDS = 2; 
+const CHUNK_SECONDS = 2;
 const CHUNK_SAMPLES = INPUT_SAMPLE_RATE * CHUNK_SECONDS;
 const CHUNK_BYTES = CHUNK_SAMPLES * INPUT_BYTES_PER_SAMPLE;
-const MIN_FINAL_CHUNK_BYTES = Math.floor(INPUT_SAMPLE_RATE * 0.5) * INPUT_BYTES_PER_SAMPLE;
+const MIN_FINAL_CHUNK_BYTES =
+  Math.floor(INPUT_SAMPLE_RATE * 0.5) * INPUT_BYTES_PER_SAMPLE;
 
 function safeUnlink(filePath: string) {
   try {
@@ -93,12 +119,13 @@ function clamp16(value: number): number {
 // Standard G.711 μ-law decode
 function muLawByteToPcmSample(uVal: number): number {
   uVal = ~uVal & 0xff;
+
   const sign = uVal & 0x80;
   const exponent = (uVal >> 4) & 0x07;
   const mantissa = uVal & 0x0f;
 
   let sample = ((mantissa << 3) + 0x84) << exponent;
-  sample = sign ? (0x84 - sample) : (sample - 0x84);
+  sample = sign ? 0x84 - sample : sample - 0x84;
 
   return clamp16(sample);
 }
@@ -115,10 +142,15 @@ function decodeMuLawBase64ToPcm16(payload: string): Buffer {
   return pcm;
 }
 
-function createWavHeader(dataLength: number, sampleRate: number, channels: number): Buffer {
+function createWavHeader(
+  dataLength: number,
+  sampleRate: number,
+  channels: number
+): Buffer {
   const bytesPerSample = 2;
   const blockAlign = channels * bytesPerSample;
   const byteRate = sampleRate * blockAlign;
+
   const buffer = Buffer.alloc(44);
 
   buffer.write("RIFF", 0);
@@ -140,7 +172,11 @@ function createWavHeader(dataLength: number, sampleRate: number, channels: numbe
   return buffer;
 }
 
-function createWavBuffer(pcmData: Buffer, sampleRate = INPUT_SAMPLE_RATE, channels = INPUT_CHANNELS): Buffer {
+function createWavBuffer(
+  pcmData: Buffer,
+  sampleRate = INPUT_SAMPLE_RATE,
+  channels = INPUT_CHANNELS
+): Buffer {
   const header = createWavHeader(pcmData.length, sampleRate, channels);
   return Buffer.concat([header, pcmData]);
 }
@@ -167,6 +203,7 @@ async function persistAndInferChunk(
   pcmChunk: Buffer
 ) {
   const chunkPath = buildWavChunkFile(session, pcmChunk);
+
   try {
     const result = await sendToML(chunkPath, {
       sessionId: session.sessionId,
@@ -179,9 +216,9 @@ async function persistAndInferChunk(
       callId: session.callId,
       chunkIndex: session.chunkIndex,
       skip: result?.skip ?? result?.skipped ?? false,
-      label: result?.final?.label ?? result?.label ?? "UNKNOWN",
-      risk: result?.final?.risk ?? result?.risk ?? "UNKNOWN",
-      confidence: result?.final?.confidence ?? result?.confidence ?? 0,
+      label: result?.final?.label ?? "UNKNOWN",
+      risk: result?.final?.risk ?? "UNKNOWN",
+      confidence: result?.final?.confidence ?? 0,
     });
   } finally {
     safeUnlink(chunkPath);
@@ -189,20 +226,35 @@ async function persistAndInferChunk(
   }
 }
 
-function buildWavChunkFile(session: TwilioStreamState, pcmChunk: Buffer): string {
+function buildWavChunkFile(
+  session: TwilioStreamState,
+  pcmChunk: Buffer
+): string {
   const chunkPath = buildChunkPath(session);
-  const wavBuffer = createWavBuffer(pcmChunk, INPUT_SAMPLE_RATE, INPUT_CHANNELS);
+  const wavBuffer = createWavBuffer(
+    pcmChunk,
+    INPUT_SAMPLE_RATE,
+    INPUT_CHANNELS
+  );
+
   fs.writeFileSync(chunkPath, wavBuffer);
+
   return chunkPath;
 }
 
 function normalizeSessionId(value: unknown): string {
-  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
   return randomUUID();
 }
 
 function normalizeCallId(value: unknown, fallback: string): string {
-  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
   return fallback;
 }
 
@@ -221,24 +273,23 @@ export function initTwilioMediaWebSocket(server: any) {
 
     ws.on("message", async (raw: Buffer) => {
       try {
-        const msg = JSON.parse(raw.toString()) as
-          | TwilioConnectedMessage
-          | TwilioStartMessage
-          | TwilioMediaMessage
-          | TwilioStopMessage
-          | Record<string, any>;
+        console.log("📩 RAW TWILIO:", raw.toString());
+        const msg = JSON.parse(raw.toString()) as TwilioMessage;
 
-        switch (msg.event as TwilioEventName) {
+        switch (msg.event) {
           case "connected": {
             console.log("📶 Twilio connected:", msg);
             break;
           }
 
           case "start": {
-            const sessionId = normalizeSessionId(msg.start?.customParameters?.sessionId);
+            const sessionId = normalizeSessionId(
+              msg.start.customParameters?.sessionId
+            );
+
             const callId = normalizeCallId(
-              msg.start?.customParameters?.callId,
-              msg.start?.callSid || sessionId
+              msg.start.customParameters?.callId,
+              msg.start.callSid || sessionId
             );
 
             activeStreamSid = msg.start.streamSid;
@@ -272,19 +323,27 @@ export function initTwilioMediaWebSocket(server: any) {
           }
 
           case "media": {
-            const state = sessions.get(msg.streamSid || activeStreamSid || "");
+            const state = sessions.get(
+              msg.streamSid || activeStreamSid || ""
+            );
+
             if (!state || state.stopped) return;
 
             const pcm = decodeMuLawBase64ToPcm16(msg.media.payload);
+
             state.pcmBuffer = Buffer.concat([state.pcmBuffer, pcm]);
 
             // Serialize chunk processing so chunks are emitted in order.
             state.processing = state.processing.then(async () => {
               while (state.pcmBuffer.length >= CHUNK_BYTES) {
                 const chunk = state.pcmBuffer.subarray(0, CHUNK_BYTES);
+
                 state.pcmBuffer = state.pcmBuffer.subarray(CHUNK_BYTES);
 
-                await persistAndInferChunk(state, Buffer.from(chunk));
+                await persistAndInferChunk(
+                  state,
+                  Buffer.from(chunk)
+                );
               }
             });
 
@@ -292,22 +351,27 @@ export function initTwilioMediaWebSocket(server: any) {
           }
 
           case "stop": {
-            const streamSid = msg.streamSid || activeStreamSid || "";
+            const streamSid =
+              msg.streamSid || activeStreamSid || "";
+
             const state = sessions.get(streamSid);
+
             if (!state) return;
 
             state.stopped = true;
 
             await state.processing;
 
-  
             if (state.pcmBuffer.length >= MIN_FINAL_CHUNK_BYTES) {
               const tail = Buffer.from(state.pcmBuffer);
+
               state.pcmBuffer = Buffer.alloc(0);
+
               await persistAndInferChunk(state, tail);
             }
 
             sessions.delete(streamSid);
+
             console.log("🛑 Twilio stream stopped", {
               sessionId: state.sessionId,
               callId: state.callId,
@@ -318,7 +382,6 @@ export function initTwilioMediaWebSocket(server: any) {
           }
 
           default:
-
             break;
         }
       } catch (err) {
@@ -330,6 +393,7 @@ export function initTwilioMediaWebSocket(server: any) {
       if (activeStreamSid) {
         sessions.delete(activeStreamSid);
       }
+
       console.log("📴 Twilio media websocket disconnected");
     });
   });

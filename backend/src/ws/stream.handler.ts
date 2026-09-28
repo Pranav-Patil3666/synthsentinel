@@ -22,7 +22,24 @@ function normalizeChunkIndex(value: unknown, fallback: number): number {
 }
 
 export const initWebSocket = (server: any) => {
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({
+  noServer: true,
+  });
+
+  server.on("upgrade", (request: any, socket: any, head: any) => {
+    const url = new URL(
+      request.url ?? "",
+      `http://${request.headers.host ?? "localhost"}`
+    );
+
+    if (url.pathname !== "/api/stream") {
+      return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  });
 
   wss.setMaxListeners(20);
 

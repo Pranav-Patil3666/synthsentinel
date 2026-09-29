@@ -1,5 +1,6 @@
 import CyberButton from "../ui/CyberButton";
 import type { SelectedAudioFile } from "../../types/analysis";
+import { displayValue } from "../../lib/format";
 
 type SelectedAudioCardProps = {
   selection: SelectedAudioFile;
@@ -23,12 +24,12 @@ export default function SelectedAudioCard({ selection, onReplace, onRemove }: Se
   return (
     <section className="selected-audio-card" aria-label="Selected audio file">
       <div className="selected-audio-topline"><span>INPUT SELECTED</span><span className="selected-file-mark" aria-hidden="true">WAV</span></div>
-      <div className="selected-file-name" title={selection.file.name}>{selection.file.name}</div>
+      <div className="selected-file-name" title={displayValue(selection.file.name)}>{displayValue(selection.file.name)}</div>
       <dl className="selected-file-meta">
         <div><dt>FORMAT</dt><dd>WAV AUDIO</dd></div>
         <div><dt>FILE SIZE</dt><dd>{formatFileSize(selection.file.size)}</dd></div>
       </dl>
-      <audio className="audio-preview" controls preload="metadata" src={selection.objectUrl} aria-label={`Audio preview: ${selection.file.name}`} />
+      <audio className="audio-preview" controls preload="metadata" src={selection.objectUrl} aria-label={`Audio preview: ${displayValue(selection.file.name)}`} />
       <div className="selected-file-actions">
         <CyberButton type="button" variant="secondary" onClick={onReplace}>REPLACE FILE</CyberButton>
         <CyberButton type="button" variant="quiet" onClick={onRemove}>REMOVE FILE</CyberButton>

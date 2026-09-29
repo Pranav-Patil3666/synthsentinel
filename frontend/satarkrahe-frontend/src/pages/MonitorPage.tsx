@@ -15,7 +15,7 @@ export default function MonitorPage() {
           <span className="monitor-glyph" aria-hidden="true">⌁</span>
           <div>
             <h3>LIVE MONITORING IS NOT YET CONNECTED IN THIS BUILD</h3>
-            <p>This workspace is reserved for session-aware forensic monitoring. No live connection or prediction data is available here.</p>
+            <p>Live monitoring depends on the telephony pipeline, which is not connected in this build. No live connection or prediction data is available here.</p>
             <CyberLink to="/analyze" variant="secondary">ANALYZE AUDIO <span aria-hidden="true">→</span></CyberLink>
           </div>
         </div>

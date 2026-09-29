@@ -7,6 +7,7 @@ const labels = {
   SUCCESS: ["ANALYSIS COMPLETE", "FORENSIC RESULT AVAILABLE"],
   SKIPPED: ["ANALYSIS SKIPPED", "The input could not be processed."],
   ERROR: ["ANALYSIS ERROR", "The analysis could not be completed."],
+  SERVICE_UNAVAILABLE: ["ML SERVICE UNAVAILABLE", "The backend returned no inference result."],
 } as const;
 
 export default function AnalysisState({ status, skipReason, errorMessage }: AnalysisStateProps) {

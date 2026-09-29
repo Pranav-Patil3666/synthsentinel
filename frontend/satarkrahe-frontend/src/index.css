@@ -16,6 +16,7 @@
   --color-input: #12121a;
   --color-ring: #00ff88;
   --color-destructive: #ff3366;
+  --color-warning: #ffc857;
 
   --glow-primary: 0 0 5px #00ff88, 0 0 10px #00ff8840;
   --glow-small: 0 0 3px #00ff88, 0 0 6px #00ff8830;
@@ -175,17 +176,6 @@
   text-shadow: var(--glow-small);
 }
 
-.main-content {
-  display: flex;
-  width: min(100% - 40px, 1120px);
-  flex: 1;
-  align-self: center;
-  align-items: center;
-  padding-block: clamp(56px, 11vh, 128px);
-}
-
-.route-page { width: 100%; }
-
 .eyebrow {
   margin: 0 0 12px;
   color: var(--color-accent-tertiary);
@@ -193,17 +183,6 @@
   font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-}
-
-.page-title {
-  margin: 0 0 34px;
-  color: var(--color-foreground);
-  font-family: var(--font-heading);
-  font-size: clamp(30px, 5vw, 52px);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  line-height: 1.1;
-  text-shadow: -1px 0 #ff00ff70, 1px 0 #00d4ff70;
 }
 
 .cyber-panel {
@@ -228,7 +207,8 @@
   padding-bottom: 16px;
 }
 
-.panel-heading h2 {
+.panel-heading h2,
+.panel-heading h3 {
   margin: 0;
   color: var(--color-accent);
   font-family: var(--font-accent);
@@ -237,17 +217,6 @@
   letter-spacing: 0.14em;
 }
 
-.status-mark {
-  width: 8px;
-  height: 8px;
-  background: var(--color-accent);
-  box-shadow: var(--glow-small);
-}
-
-.route-details { display: grid; gap: 20px; margin: 22px 0 0; }
-.route-details div { display: grid; grid-template-columns: minmax(72px, 120px) 1fr; gap: 12px; }
-.route-details dt { color: var(--color-muted-foreground); font-family: var(--font-accent); font-size: 11px; letter-spacing: 0.1em; }
-.route-details dd { margin: 0; color: var(--color-foreground); font-size: 12px; letter-spacing: 0.04em; }
 .site-footer {
   min-height: 58px;
   border-top: 1px solid var(--color-border);
@@ -255,13 +224,6 @@
   font-family: var(--font-accent);
   font-size: 10px;
   letter-spacing: 0.12em;
-}
-
-@media (max-width: 640px) {
-  .site-header { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; padding-block: 14px; }
-  .primary-nav { width: 100%; justify-content: flex-start; }
-  .nav-link { padding-inline: 4px; font-size: 10px; }
-  .route-details div { grid-template-columns: 1fr; gap: 3px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -274,3 +236,4 @@
     transition-duration: 0.01ms !important;
   }
 }
+

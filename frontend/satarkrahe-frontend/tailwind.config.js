@@ -13,6 +13,7 @@ export default {
         "accent-secondary": "var(--color-accent-secondary)", "accent-tertiary": "var(--color-accent-tertiary)",
         border: "var(--color-border)", input: "var(--color-input)", ring: "var(--color-ring)",
         destructive: "var(--color-destructive)",
+        warning: "var(--color-warning)",
       },
       fontFamily: {
         heading: ["Orbitron", "Share Tech Mono", "monospace"],

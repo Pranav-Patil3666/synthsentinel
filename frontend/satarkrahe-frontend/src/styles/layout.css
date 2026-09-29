@@ -1,0 +1,246 @@
+.app-shell {
+  overflow: clip;
+}
+
+.panel-mark {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  transform: rotate(45deg);
+  border: 1px solid var(--color-accent-tertiary);
+}
+
+.main-content {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  display: block;
+}
+
+.page-container {
+  width: min(100% - 48px,1240px);
+  margin-inline: auto;
+}
+
+.route-page {
+  width: 100%;
+}
+
+.skip-link {
+  position: fixed;
+}
+
+.site-header {
+  z-index: 8;
+  min-height: 84px;
+  padding-inline: max(24px,50vw - 620px);
+  position: relative;
+}
+
+.wordmark {
+  gap: 12px;
+}
+
+.wordmark-copy {
+  gap: 1px;
+  display: grid;
+}
+
+.wordmark-name {
+  letter-spacing: .1em;
+  font-size: 14px;
+}
+
+.wordmark-caption {
+  color: var(--color-muted-foreground);
+  font-family: var(--font-accent);
+  letter-spacing: .2em;
+  font-size: 9px;
+}
+
+.primary-nav {
+  align-items: center;
+  gap: clamp(4px,1vw,16px);
+}
+
+.nav-link {
+  padding-inline: 10px;
+  position: relative;
+}
+
+.nav-link[aria-current=page]:before {
+  background: var(--color-accent);
+  width: 4px;
+  height: 4px;
+  box-shadow: var(--glow-small);
+  content: "";
+  margin-right: 8px;
+  animation: 2.6s steps(2,end) infinite activePulse;
+}
+
+@keyframes activePulse {
+  0%,80%,to {
+    opacity: 1;
+  }
+  82% {
+    opacity: .55;
+  }
+}
+
+.menu-toggle {
+  display: none;
+}
+
+.site-footer {
+  background: #0c0c12;
+  grid-template-columns: minmax(240px,1fr) auto;
+  gap: 24px 44px;
+  min-height: auto;
+  padding: 34px max(24px,50vw - 620px);
+  display: grid;
+}
+
+.footer-brand {
+  color: var(--color-foreground);
+  align-items: center;
+  gap: 14px;
+  display: flex;
+}
+
+.footer-brand strong {
+  color: var(--color-accent);
+  font-family: var(--font-heading);
+  letter-spacing: .12em;
+  font-size: 12px;
+}
+
+.footer-brand p {
+  max-width: 440px;
+  color: var(--color-muted-foreground);
+  margin: 5px 0 0;
+  font-size: 11px;
+}
+
+.footer-nav {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 18px;
+  display: flex;
+}
+
+.footer-nav a {
+  min-height: 44px;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-accent);
+  letter-spacing: .12em;
+  align-items: center;
+  font-size: 10px;
+  text-decoration: none;
+  display: inline-flex;
+}
+
+.footer-nav a:hover {
+  color: var(--color-accent);
+}
+
+.footer-meta {
+  border-top: 1px solid var(--color-border);
+  color: #858b99;
+  font-family: var(--font-accent);
+  letter-spacing: .14em;
+  grid-column: 1/-1;
+  margin: 0;
+  padding-top: 16px;
+  font-size: 10px;
+}
+
+.footer-meta span {
+  color: var(--color-accent-secondary);
+  padding-inline: 8px;
+}
+
+.cyber-button {
+  border: 1px solid var(--color-accent);
+  clip-path: polygon(0 8px,8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%);
+  min-height: 48px;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-family: var(--font-accent);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  background: 0 0;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: color .12s steps(2,end),background-color .12s steps(2,end),box-shadow .12s steps(2,end),transform .12s steps(2,end);
+  display: inline-flex;
+  position: relative;
+}
+
+.cyber-button:hover:not(:disabled) {
+  box-shadow: var(--glow-primary);
+  animation: .24s steps(2,end) glitch;
+  transform: translateY(-1px);
+}
+
+.cyber-button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+  box-shadow: var(--glow-primary);
+}
+
+.cyber-button--primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #06130d;
+}
+
+.cyber-button--primary:hover:not(:disabled) {
+  color: #06130d;
+  background: #65ffb8;
+}
+
+.cyber-button--secondary {
+  color: var(--color-accent);
+  background: #00ff8808;
+}
+
+.cyber-button--secondary:hover:not(:disabled) {
+  background: #00ff8818;
+}
+
+.cyber-button--quiet {
+  border-color: var(--color-border);
+  color: var(--color-muted-foreground);
+}
+
+.cyber-button--quiet:hover:not(:disabled) {
+  border-color: var(--color-destructive);
+  color: var(--color-destructive);
+  box-shadow: 0 0 8px #ff336630;
+}
+
+.cyber-button:disabled {
+  color: #737381;
+  cursor: not-allowed;
+  box-shadow: none;
+  background: #16161d;
+  border-color: #383843;
+  animation: none;
+}
+
+.nav-cta {
+  white-space: nowrap;
+  min-height: 42px;
+  margin-left: 6px;
+}
+
+.terminal-prefix {
+  color: var(--color-accent);
+}

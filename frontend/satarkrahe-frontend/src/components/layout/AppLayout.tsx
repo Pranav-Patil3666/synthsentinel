@@ -1,43 +1,30 @@
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import Footer from "./Footer";
+import Navbar from "./Navbar";
 
-const navigation = [
-  { label: "HOME", to: "/", end: true },
-  { label: "ANALYZE AUDIO", to: "/analyze", end: false },
-  { label: "LIVE MONITOR", to: "/monitor", end: false },
-];
+const routeTitles: Record<string, string> = {
+  "/": "SynthSentinel — Voice Forensics",
+  "/analyze": "Analyze Audio — SynthSentinel",
+  "/monitor": "Live Monitor — SynthSentinel",
+};
 
 export default function AppLayout() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    document.title = routeTitles[pathname] ?? "Not Found — SynthSentinel";
+  }, [pathname]);
+
   return (
     <div className="app-shell scanlines">
-      <a className="skip-link" href="#main-content">SKIP TO CONTENT</a>
-      <header className="site-header">
-        <Link className="wordmark" to="/" aria-label="SynthSentinel home">
-          <span className="wordmark-mark" aria-hidden="true">SS</span>
-          <span>SynthSentinel</span>
-        </Link>
-
-        <nav className="primary-nav" aria-label="Primary navigation">
-          {navigation.map(({ label, to, end }) => (
-            <NavLink
-              key={to}
-              className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}
-              to={to}
-              end={end}
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-      </header>
-
-      <main className="main-content" id="main-content">
+      <a className="skip-link" href="#main-content">SKIP TO MAIN CONTENT</a>
+      <Navbar />
+      <main className="main-content" id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
-
-      <footer className="site-footer">
-        <span>VOICE FORENSICS / FRONTEND FOUNDATION</span>
-        <span>PHASE 01</span>
-      </footer>
+      <Footer />
     </div>
   );
 }
